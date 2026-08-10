@@ -1,0 +1,76 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log
+pnpm-lock.yaml
+package-lock.json
+
+# Next.js / frontend build
+frontend/.next/
+frontend/out/
+frontend/dist/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+*.pdb
+*.egg-info/
+dist/
+build/
+venv/
+.env/
+.venv/
+env/
+ENV/
+pip-wheel-metadata/
+.python-version
+
+# Virtualenv / tools
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Test / coverage
+.coverage
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+.pytest_cache/
+
+# IDEs / editors
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Secrets and env
+.env
+.env.* 
+secrets.env
+
+# Misc
+*.sqlite3
+*.db
+*.sqlite
+*.pem
+*.key
+
+# Frontend specific
+public/favicon.ico
+
+# Ignore build artifacts from other tools
+*.tgz
+*.zip
+*.tar.gz
