@@ -1,28 +1,39 @@
 import { useState } from "react";
 import styles from "../styles/Home.module.css";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+
 export default function Home() {
     const [message, setMessage] = useState("");
     const [reply, setReply] = useState("");
+    const [loading, setLoading] = useState(false);
 
-    const sendMessage = async () => {
+    // Make sure this function is async because it uses await
+    async function sendMessage() {
         try {
+            if (!message || !message.trim()) {
+                console.log("No message entered");
+                return;
+            }
+
             console.log("Button clicked, sending:", message);
 
             const body = JSON.stringify({ message });
             console.log("Outgoing body string:", body);
 
-            const res = await fetch("http://127.0.0.1:8000/chat", {
+            setLoading(true);
+
+            const res = await fetch(`${API_URL}/chat`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body,
             });
 
             console.log("Response status:", res.status);
+
             const text = await res.text();
             console.log("Raw response text:", text);
 
-            // Try to parse JSON safely
             try {
                 const data = JSON.parse(text);
                 console.log("Parsed JSON:", data);
@@ -33,14 +44,16 @@ export default function Home() {
             }
         } catch (err) {
             console.error("Error calling backend:", err);
+            setReply("Network or server error");
+        } finally {
+            setLoading(false);
         }
-    };
-
-
+    }
 
     return (
         <div className={styles.container}>
             <h1 className={styles.title}>AI Chatbot</h1>
+
             <textarea
                 className={styles.textarea}
                 rows="4"
@@ -48,9 +61,20 @@ export default function Home() {
                 placeholder="Type your message..."
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-            ></textarea>
+            />
             <br />
-            <button type="button" className={styles.button} onClick={sendMessage}>Send</button>
+
+            <button
+                className={styles.button}
+                onClick={() => {
+                    // ensure sendMessage is called (it is async)
+                    sendMessage();
+                }}
+                disabled={loading}
+            >
+                {loading ? "Sending..." : "Send"}
+            </button>
+
             <h2>Response:</h2>
             <p className={styles.reply}>{reply}</p>
         </div>
