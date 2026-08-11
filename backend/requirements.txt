@@ -1,6 +1,6 @@
-fastapi==0.111.0
-uvicorn==0.30.1
-groq>=1.61.0
+fastapi>=0.141.1
+uvicorn>=0.52.1
+groq>=1.6.0
 pypdf>=6.15.0
 python-dotenv>=1.2.2
 requests>=2.34.2
