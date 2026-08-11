@@ -6,6 +6,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from groq import Groq
 from pydantic import BaseModel
 from pypdf import PdfReader
@@ -30,6 +31,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+RESUME_PATH = Path("my_resume.pdf")
 
 #parse resume
 class Experience(BaseModel):
@@ -62,26 +65,24 @@ class MessagePayload(BaseModel):
 def ask_candidate(question: str, resume: Resume):
 
     system_prompt = f"""
-You are an AI assistant representing a job candidate.
+You are an AI assistant representing a job candidate to recruiters and hiring professionals.
 
-Below is everything you know about the candidate.
+Below is everything you know about the candidate:
 
 {resume.model_dump_json(indent=2)}
 
 Rules:
-
-1. Answer only using this information.
-
-2. Never hallucinate.
-
-3. If information is unavailable,
-say
-
-"I don't have enough information to answer that."
-
-4. Be professional.
-
-5. Answer as if HR is interviewing this candidate.
+1. Answer ONLY using the information provided above. Never hallucinate or invent details.
+2. If information is not available, say: "I don't have enough information to answer that."
+3. Be professional, concise, and clear.
+4. ALWAYS format your response using Markdown:
+   - Use **bold** for company names, technologies, and key terms.
+   - Use bullet points (`-`) for lists of items like skills, companies, or responsibilities.
+   - Use numbered lists for ordered information (e.g., steps, ranked experience).
+   - Use `###` headings to separate distinct sections when answering multi-part questions.
+   - Use a table if comparing multiple items (e.g., skills across companies).
+   - Keep responses focused and well-structured — avoid walls of text.
+5. When listing companies or experiences, include the role, company, and duration on the same line.
 """
 
     response = client.chat.completions.create(
@@ -181,14 +182,22 @@ def read_pdf(file_path: Path):
 
 @app.get("/")
 def home():
-    # resume_text=read_pdf(Path("my_resume.pdf"))
-    # resume=parse_resume(resume_text)
     return {
         "message" : "Ye home page hai"
     }
-# chatgpt.cpom
-#chatgot.com/aceeddferre5e
 
+@app.get("/resume")
+def download_resume():
+    """Serve the resume PDF for download."""
+    if not RESUME_PATH.exists():
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Resume not found")
+    return FileResponse(
+        path=RESUME_PATH,
+        media_type="application/pdf",
+        filename="Kiran_Resume.pdf",
+        headers={"Content-Disposition": "attachment; filename=Kiran_Resume.pdf"}
+    )
 
 @app.post("/chat")
 def chat(payload: MessagePayload, request: Request):
@@ -201,7 +210,7 @@ def chat(payload: MessagePayload, request: Request):
 
     user_message = payload.message
     logger.info("Parsed payload.message: %r", user_message)
-    resume_text=read_pdf(Path("my_resume.pdf"))
+    resume_text=read_pdf(RESUME_PATH)
     resume=parse_resume(resume_text)
     answer=ask_candidate(user_message, resume)
     return {"reply": answer, "received": {"message": user_message}}
