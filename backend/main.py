@@ -1,17 +1,27 @@
-# backend/main.py
+import json
+import os
+import logging
+from pathlib import Path
+
+from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from groq import Groq
 from pydantic import BaseModel
-import uvicorn
-import logging
+from pypdf import PdfReader
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("backend")
 
-class MessagePayload(BaseModel):
-    message: str = ""
+load_dotenv()
 
-app = FastAPI()
+client = Groq(
+    api_key=os.getenv("GROQ_API_KEY")
+)
+
+model = "openai/gpt-oss-120b"
+app=FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
@@ -21,15 +31,169 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+#parse resume
+class Experience(BaseModel):
+    company: str | None = None
+    role: str | None = None
+    duration: str | None = None
+    description: str | None = None
+    skills_used: list[str] = []
+
+class Resume(BaseModel):
+    name: str | None = None
+    email: str | None = None
+    phone: str | None = None
+
+    total_experience_years: float | None = None
+
+    skills: list[str] = []
+    experiences: list[Experience] = []
+    education: list[str] = []
+    projects: list[str] = []
+    certifications: list[str] = []
+resume_schema = Resume.model_json_schema()
+
+class ChatRequest(BaseModel):
+    question: str
+
+class MessagePayload(BaseModel):
+    message: str = ""
+
+def ask_candidate(question: str, resume: Resume):
+
+    system_prompt = f"""
+You are an AI assistant representing a job candidate.
+
+Below is everything you know about the candidate.
+
+{resume.model_dump_json(indent=2)}
+
+Rules:
+
+1. Answer only using this information.
+
+2. Never hallucinate.
+
+3. If information is unavailable,
+say
+
+"I don't have enough information to answer that."
+
+4. Be professional.
+
+5. Answer as if HR is interviewing this candidate.
+"""
+
+    response = client.chat.completions.create(
+
+        model=model,
+
+        messages=[
+
+            {
+                "role":"system",
+                "content":system_prompt
+            },
+
+            {
+                "role":"user",
+                "content":question
+            }
+
+        ]
+
+    )
+    print(f"\n\nask_candidate response is: {response}\n\n")
+    return response.choices[0].message.content
+
+def parse_resume(resume_text):
+    system_prompt = f"""
+    You are an expert resume parser.
+
+    Extract information from the resume based on its meaning,
+    not only based on exact section headings.
+
+    Different resumes may use different headings.
+
+    For example:
+    - Experience
+    - Professional Experience
+    - Work History
+    - Employment
+    - Internships
+
+    These may all contain relevant experience.
+
+    Skills may also appear in the skills section, work experience,
+    internships or projects.
+
+    Return ONLY valid JSON matching this schema:
+
+    {resume_schema}
+
+    Important rules:
+
+    1. Do not invent information.
+    2. If a value is not available, return null.
+    3. If a list has no information, return an empty list.
+    4. Include internships inside experiences.
+    5. Extract skills mentioned across the entire resume.
+    """
+    user_prompt = f"""
+    Parse the following resume:
+
+    {resume_text}
+    """
+    message_system={
+        "role" : "system",
+        "content" : system_prompt
+    }
+    message_user={
+        "role" : "user",
+        "content" : user_prompt
+    }
+    messages=[message_system, message_user]
+    response_format={
+        "type": "json_object"
+    }
+    response=client.chat.completions.create(model=model, messages=messages, response_format=response_format)
+    raw_output = response.choices[0].message.content
+    data = json.loads(raw_output)
+    resume = Resume(**data)
+    print(f"\n\nparse_resume resume is: {resume}\n\n")
+    return resume
+
+#pdf extraction
+def read_pdf(file_path: Path):
+
+    reader = PdfReader(file_path)
+
+    text = ""
+
+    for page in reader.pages:
+
+        page_text = page.extract_text()
+
+        if page_text:
+            text += page_text + "\n"
+    print(f"read_pdf text is: {text}")
+    return text
+
 @app.get("/")
-def root():
-    return {"message": "Backend is running!"}
+def home():
+    # resume_text=read_pdf(Path("my_resume.pdf"))
+    # resume=parse_resume(resume_text)
+    return {
+        "message" : "Ye home page hai"
+    }
+# chatgpt.cpom
+#chatgot.com/aceeddferre5e
+
 
 @app.post("/chat")
-async def chat_endpoint(payload: MessagePayload, request: Request):
-    # Log headers and raw body for debugging
+def chat(payload: MessagePayload, request: Request):
     try:
-        raw_body = await request.body()
+        raw_body = request.body()
         logger.info("Request headers: %s", dict(request.headers))
         logger.info("Raw body bytes: %s", raw_body)
     except Exception as e:
@@ -37,10 +201,7 @@ async def chat_endpoint(payload: MessagePayload, request: Request):
 
     user_message = payload.message
     logger.info("Parsed payload.message: %r", user_message)
-
-    # Simple echo response
-    response = f"AI Response to: {user_message}"
-    return {"reply": response, "received": {"message": user_message}}
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    resume_text=read_pdf(Path("my_resume.pdf"))
+    resume=parse_resume(resume_text)
+    answer=ask_candidate(user_message, resume)
+    return {"reply": answer, "received": {"message": user_message}}
